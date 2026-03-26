@@ -1,0 +1,1 @@
+/usr/bin/c++  -arch arm64 -Wl,-search_paths_first -Wl,-headerpad_max_install_names CMakeFiles/Server.dir/src/Server.cpp.o CMakeFiles/Server.dir/src/Socket.cpp.o CMakeFiles/Server.dir/src/HTML_METHODS.cpp.o -o Server
