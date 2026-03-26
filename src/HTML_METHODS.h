@@ -54,4 +54,5 @@ enum HttpStatusCode {
 };
 
   void handle_request(int client_socket, char buffer[]);
+  std::string to_string(int response);
 }
