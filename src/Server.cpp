@@ -9,13 +9,14 @@ private:
     int server_fd;
     sockaddr_in* address;
     socklen_t addrlen;
-    Socket_Util::Accept_client * new_clients[10];
+    Socket_Util::Accept_client* clients[10];
     int total_clients{0};
-    public:
+
+public:
     
     Server(int port) {
-        server_fd = Socket_Util::CreateSocket();
         int opt = 1;
+        server_fd = Socket_Util::CreateSocket();
         address = Socket_Util::CreateAdrress(port);
 
         addrlen = sizeof(*address);
@@ -28,7 +29,7 @@ private:
             exit(1);
         }
 
-        if (listen(server_fd, 10) < 0) {
+        if (::listen(server_fd, 10) < 0) {
             perror("listen failed");
         }
     }
@@ -37,21 +38,21 @@ private:
     void Accept_new_Clients() {
         
         while (true) {
+
             struct Socket_Util::Accept_client *client_socket =  Socket_Util::Client_Socket(server_fd);
             
-            std::cout << "New client connected with FD: " << client_socket->reciving_socket << "\n";
             
             if (client_socket == nullptr || client_socket->reciving_socket < 0) {
                 perror("Client_Socket failed");
                 continue;
             }else{
-                std::lock_guard<std::mutex> lock(clients_mutex);
+                std::cout << "\nNew client connected with FD: " << client_socket->reciving_socket << "\n";
+                if(total_clients<10){
 
-                if (total_clients < 10) {
-                    new_clients[total_clients++] = client_socket;
+                    std::lock_guard<std::mutex> lock(clients_mutex);
+                    clients[total_clients++] = client_socket;
                 }
             }
-            
             std::thread multiple_clients(&Server::recieve_data,this,client_socket->reciving_socket);
             multiple_clients.detach();
         }
@@ -59,43 +60,51 @@ private:
     }
     
     void recieve_data(int socket) {
-        std::cout << "Thread using FD: " << socket << "\n";
-    
-        char buffer[1024] = {0};
-        int bytes = ::recv(socket, buffer, 1023, 0);
-        
-        if (bytes <= 0) {
-            perror("recieve failed form here");
-            return;
+        std::cout << "\n Thread using FD: " << socket << "\n";
+        for(;;){
+
+            char buffer[2048] = {0};
+            int bytes = ::recv(socket, buffer, 2048, 0);
             
-        }else{
-            std::cout << ":: Message from client # :: " << socket-3 << "\n\n";
-            
-            HTML::handle_request(socket, buffer);
-            
-            buffer[bytes] = '\0';
-            
-        }   
-        close(socket);
-        remove_client(socket);
+            if (bytes <= 0) {
+                perror("recieve failed form here");
+                remove_client(socket);
+                close(socket);
+                return;
+                
+            }else{
+                std::cout << ":: Message from client # :: " << socket-3 << "\n\n";
+                
+                HTML::handle_request(socket, buffer);
+                std::unordered_map<std::string,std::string> request_data = HTML::Parse_Request(buffer);
+                
+                if(request_data["Connection"] != "keep-alive"){
+                    remove_client(socket);
+                    close(socket);
+                    break;
+                }
+                
+                buffer[bytes] = '\0';   
+            }   
+        }
     }
 
-    void remove_client(int socket) {
+    void remove_client(int client_socket){
         std::lock_guard<std::mutex> lock(clients_mutex);
+        for(int i = 0; i < total_clients; i++){
+            if(clients[i]->reciving_socket == client_socket){
+                delete clients[i];
 
-        for (int i = 0; i < total_clients; i++) {
-            if (new_clients[i]->reciving_socket == socket) {
-
-                free(new_clients[i]);
-
-                for (int j = i; j < total_clients - 1; j++) {
-                    new_clients[j] = new_clients[j + 1];
+                // shift left
+                for(int j = i; j < total_clients - 1; j++){
+                    clients[j] = clients[j+1];
                 }
 
                 total_clients--;
                 break;
             }
         }
+    
     }
 
     ~Server() {

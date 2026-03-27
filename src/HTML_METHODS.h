@@ -54,5 +54,6 @@ enum HttpStatusCode {
 };
 
   void handle_request(int client_socket, char buffer[]);
-  std::string to_string(int response);
+  std::string to_string(HttpMethod response);
+  std::unordered_map<std::string, std::string> Parse_Request(char request[]);
 }
